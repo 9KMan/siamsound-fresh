@@ -1,19 +1,6 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
   <base href="/siamsound-fresh/">
 
   <meta charset="UTF-8">
@@ -100,6 +87,141 @@
           initAudioContext();
         }
       });
+    })();
+  
+    // Additional iOS audio enhancement for more reliable audio playback
+    (function() {
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      
+      if (isIOS) {
+        let audioContext;
+        let unlocked = false;
+        
+        // Initialize audio context and unlock mechanism
+        function initIOSAudio() {
+          if (audioContext) return;
+          
+          try {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            audioContext = new AudioContext();
+            
+            // Create unlock function
+            const unlock = function() {
+              if (unlocked) return;
+              
+              // Create empty buffer and play it
+              const buffer = audioContext.createBuffer(1, 1, 22050);
+              const source = audioContext.createBufferSource();
+              source.buffer = buffer;
+              source.connect(audioContext.destination);
+              source.start(0);
+              
+              // Check if it's unlocked after a short delay
+              setTimeout(() => {
+                if (audioContext && audioContext.state === 'running') {
+                  unlocked = true;
+                  document.body.removeEventListener('touchstart', unlock);
+                  document.body.removeEventListener('click', unlock);
+                  
+                  // Notify Dart side that audio is unlocked
+                  if (window.onIOSAudioUnlocked) {
+                    window.onIOSAudioUnlocked();
+                  }
+                }
+              }, 0);
+            };
+            
+            // Setup unlock events on first interaction
+            document.body.addEventListener('touchstart', unlock, { once: true });
+            document.body.addEventListener('click', unlock, { once: true });
+          } catch (e) {
+            console.warn('iOS Audio Context initialization failed:', e);
+          }
+        }
+        
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', initIOSAudio);
+        
+        // Also try to initialize on first user interaction
+        document.addEventListener('touchstart', initIOSAudio, { once: true });
+        document.addEventListener('click', initIOSAudio, { once: true });
+      }
+    })();
+    
+    // iOS Audio Context Restoration - handles suspended contexts after first play
+    (function() {
+      if (/iPad|iPhone|iPod/.test(navigator.userAgent) || 
+          (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
+        
+        let audioContext;
+        let resumeAttempts = 0;
+        const maxResumeAttempts = 3;
+        
+        function getAudioContext() {
+          if (!window.AudioContext) window.AudioContext = window.webkitAudioContext;
+          return new AudioContext();
+        }
+        
+        // Function to resume suspended audio context
+        function resumeIOSAudioContext() {
+          if (!audioContext) {
+            // Try to get Flutter's audio context or create our own
+            try {
+              audioContext = getAudioContext();
+            } catch (e) {
+              console.warn('Could not create audio context:', e);
+              return;
+            }
+          }
+          
+          if (audioContext.state === 'suspended' || audioContext.state === 'closed') {
+            audioContext.resume().then(() => {
+              console.log('Audio context resumed successfully');
+              resumeAttempts = 0;
+              
+              // Notify Flutter that audio is available again
+              if (window.onIOSAudioUnlocked) {
+                window.onIOSAudioUnlocked();
+              }
+            }).catch((err) => {
+              console.warn('Failed to resume audio context:', err);
+              if (resumeAttempts < maxResumeAttempts) {
+                resumeAttempts++;
+                setTimeout(resumeIOSAudioContext, 100);
+              }
+            });
+          }
+        }
+        
+        // Monitor for context suspension
+        document.addEventListener('visibilitychange', function() {
+          if (!document.hidden && audioContext) {
+            setTimeout(resumeIOSAudioContext, 100);
+          }
+        });
+        
+        // Also resume on user interactions
+        document.addEventListener('touchstart', resumeIOSAudioContext, { once: false });
+        document.addEventListener('click', resumeIOSAudioContext, { once: false });
+        
+        // Try to initialize audio context on load
+        window.addEventListener('load', function() {
+          // Attempt to initialize audio context if not already done
+          setTimeout(() => {
+            if (!audioContext) {
+              try {
+                audioContext = getAudioContext();
+              } catch (e) {
+                console.warn('Could not create audio context on load:', e);
+              }
+            }
+          }, 500);
+        });
+        
+        // Expose function for Flutter to call to resume context
+        window.resumeIOSAudioContext = resumeIOSAudioContext;
+      }
     })();
   </script>
 </head>
