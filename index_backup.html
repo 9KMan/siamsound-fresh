@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="/siamsound-fresh/">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="An app to explore traditional Thai musical instruments">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Thai Music Explorer">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Chrome for Android theme color -->
+  <meta name="theme-color" content="#0175C2">
+
+  <!-- Windows meta tags -->
+  <meta name="msapplication-TileColor" content="#0175C2">
+  <meta name="msapplication-TileImage" content="icons/Icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>Thai Music Explorer</title>
+  <link rel="manifest" href="manifest.json">
+
+  <script>
+    // iOS Audio Unlock Function
+    (function() {
+      let audioUnlocked = false;
+      let audioContext = null;
+      let iOS = false;
+      
+      // Detect iOS devices
+      function isIOS() {
+        return /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+               (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      }
+      
+      // Initialize audio context
+      function initAudioContext() {
+        if (audioContext) return;
+        
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        audioContext = new AudioContext();
+        
+        // Create unlock sound buffer
+        const buffer = audioContext.createBuffer(1, 1, 22050);
+        const source = audioContext.createBufferSource();
+        source.buffer = buffer;
+        source.connect(audioContext.destination);
+        source.start(0);
+      }
+      
+      // Unlock function
+      function unlockIOSAudio() {
+        if (audioUnlocked) return;
+        
+        initAudioContext();
+        audioUnlocked = true;
+        
+        // Call the Dart callback to notify that iOS audio is unlocked
+        if (window.onIOSAudioUnlocked) {
+          window.onIOSAudioUnlocked();
+        }
+        
+        // Remove event listeners after unlock
+        document.removeEventListener('touchstart', unlockIOSAudio);
+        document.removeEventListener('click', unlockIOSAudio);
+        document.removeEventListener('touchend', unlockIOSAudio);
+      }
+      
+      // Check if iOS and set up unlock
+      if (isIOS()) {
+        iOS = true;
+        document.addEventListener('touchstart', unlockIOSAudio, { once: true });
+        document.addEventListener('click', unlockIOSAudio, { once: true });
+        document.addEventListener('touchend', unlockIOSAudio, { once: true });
+      }
+      
+      // Also initialize on load as a backup
+      window.addEventListener('load', function() {
+        // Ensure audio context exists on load
+        if (isIOS() && !audioContext) {
+          initAudioContext();
+        }
+      });
+    })();
+  </script>\n  \n  // Additional iOS audio enhancement\n  (function() {\n    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || \n                  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);\n    \n    if (isIOS) {\n      let audioContext;\n      let unlocked = false;\n      \n      // Initialize audio context and unlock mechanism\n      function initIOSAudio() {\n        if (audioContext) return;\n        \n        try {\n          const AudioContext = window.AudioContext || window.webkitAudioContext;\n          audioContext = new AudioContext();\n          \n          // Create unlock function\n          const unlock = function() {\n            if (unlocked) return;\n            \n            // Create empty buffer and play it\n            const buffer = audioContext.createBuffer(1, 1, 22050);\n            const source = audioContext.createBufferSource();\n            source.buffer = buffer;\n            source.connect(audioContext.destination);\n            source.start(0);\n            \n            // Check if it's unlocked after a short delay\n            setTimeout(() => {\n              if (audioContext && audioContext.state === 'running') {\n                unlocked = true;\n                document.body.removeEventListener('touchstart', unlock);\n                document.body.removeEventListener('click', unlock);\n                \n                // Notify Dart side that audio is unlocked\n                if (window.onIOSAudioUnlocked) {\n                  window.onIOSAudioUnlocked();\n                }\n              }\n            }, 0);\n          };\n          \n          // Setup unlock events on first interaction\n          document.body.addEventListener('touchstart', unlock, { once: true });\n          document.body.addEventListener('click', unlock, { once: true });\n        } catch (e) {\n          console.warn('iOS Audio Context initialization failed:', e);\n        }\n      }\n      \n      // Initialize when page loads\n      document.addEventListener('DOMContentLoaded', initIOSAudio);\n      \n      // Also try to initialize on first user interaction\n      document.addEventListener('touchstart', initIOSAudio, { once: true });\n      document.addEventListener('click', initIOSAudio, { once: true });\n    }\n  })();
+</head>
+<body>
+  <script src="flutter_bootstrap.js" async></script>\n  \n  // Additional iOS audio enhancement\n  (function() {\n    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || \n                  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);\n    \n    if (isIOS) {\n      let audioContext;\n      let unlocked = false;\n      \n      // Initialize audio context and unlock mechanism\n      function initIOSAudio() {\n        if (audioContext) return;\n        \n        try {\n          const AudioContext = window.AudioContext || window.webkitAudioContext;\n          audioContext = new AudioContext();\n          \n          // Create unlock function\n          const unlock = function() {\n            if (unlocked) return;\n            \n            // Create empty buffer and play it\n            const buffer = audioContext.createBuffer(1, 1, 22050);\n            const source = audioContext.createBufferSource();\n            source.buffer = buffer;\n            source.connect(audioContext.destination);\n            source.start(0);\n            \n            // Check if it's unlocked after a short delay\n            setTimeout(() => {\n              if (audioContext && audioContext.state === 'running') {\n                unlocked = true;\n                document.body.removeEventListener('touchstart', unlock);\n                document.body.removeEventListener('click', unlock);\n                \n                // Notify Dart side that audio is unlocked\n                if (window.onIOSAudioUnlocked) {\n                  window.onIOSAudioUnlocked();\n                }\n              }\n            }, 0);\n          };\n          \n          // Setup unlock events on first interaction\n          document.body.addEventListener('touchstart', unlock, { once: true });\n          document.body.addEventListener('click', unlock, { once: true });\n        } catch (e) {\n          console.warn('iOS Audio Context initialization failed:', e);\n        }\n      }\n      \n      // Initialize when page loads\n      document.addEventListener('DOMContentLoaded', initIOSAudio);\n      \n      // Also try to initialize on first user interaction\n      document.addEventListener('touchstart', initIOSAudio, { once: true });\n      document.addEventListener('click', initIOSAudio, { once: true });\n    }\n  })();
+</body>
+</html>
