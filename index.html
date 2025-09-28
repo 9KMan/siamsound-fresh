@@ -1,7 +1,20 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <base href="/siamsound-fresh/">
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="/">
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
@@ -27,7 +40,7 @@
   <link rel="manifest" href="manifest.json">
 
   <script>
-    // iOS Audio Unlock Function
+    // iOS Audio Unlock Function with WASM-compatible communication
     (function() {
       let audioUnlocked = false;
       let audioContext = null;
@@ -39,14 +52,9 @@
                (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
       }
       
-      // Initialize audio context
-      function initAudioContext() {
-        if (audioContext) return;
-        
-        const AudioContext = window.AudioContext || window.webkitAudioContext;
-        audioContext = new AudioContext();
-        
-        // Create unlock sound buffer
+      // Create a minimal audio buffer to unlock audio on iOS
+      function createUnlockBuffer() {
+        if (!audioContext) return;
         const buffer = audioContext.createBuffer(1, 1, 22050);
         const source = audioContext.createBufferSource();
         source.buffer = buffer;
@@ -54,16 +62,92 @@
         source.start(0);
       }
       
+      // Initialize audio context
+      function initAudioContext() {
+        if (audioContext) return;
+        
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        audioContext = new AudioContext();
+        
+        // Create unlock sound buffer immediately to help maintain context
+        createUnlockBuffer();
+      }
+      
+      // Call Flutter method to mark iOS audio as unlocked
+      function callFlutterIOSUnlocked() {
+        // Use a postMessage approach that's compatible with WASM builds
+        if (window.flutterWebRenderer !== undefined) {
+          // Check if the Flutter app is loaded and has the method
+          if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+            window.flutter_inappwebview.callHandler('onIOSAudioUnlocked', true);
+          } else if (window.FlutterApp) {
+            window.FlutterApp.onIOSAudioUnlocked && window.FlutterApp.onIOSAudioUnlocked();
+          } else if (window.flutter) {
+            // Standard Flutter web approach
+            const msg = {
+              "name": "onIOSAudioUnlocked",
+              "args": {}
+            };
+            window.parent.postMessage(msg, "*");
+          } else {
+            // Fallback: try direct access to Flutter's engine
+            // This approach is compatible with Flutter web standard approach
+            if (window.flutterApp || window.flutterLoader) {
+              // Try to communicate through Flutter's messaging system if available
+              setTimeout(() => {
+                // Try to find Flutter's message handler
+                if (window.flutter_bootstrap) {
+                  // This is a placeholder for communication if needed
+                  // We'll use window function approach next
+                }
+              }, 100);
+            }
+          }
+        }
+        
+        // More direct approach: call Flutter method if available
+        if (window.flutter) {
+          // If window.flutter exists, try to call the method directly
+          try {
+            window.flutter.invokeMethod && window.flutter.invokeMethod('onIOSAudioUnlocked');
+          } catch (e) {
+            // If direct method fails, add a global function that Flutter can check
+            window.onIOSAudioUnlocked = function() {
+              // This will be called by Flutter
+            };
+            
+            // Set a flag that Flutter can check
+            window.iosAudioUnlocked = true;
+          }
+        } else {
+          // Set a global flag that Flutter can check periodically
+          window.iosAudioUnlocked = true;
+          
+          // Try to access Flutter's engine instance if loaded
+          const flutterApp = document.querySelector('#flutter-app') || document.querySelector('#app') || document.querySelector('flt-glass-pane');
+          if (flutterApp && flutterApp.shadowRoot) {
+            // Custom element might have methods
+          }
+        }
+      }
+      
       // Unlock function
       function unlockIOSAudio() {
         if (audioUnlocked) return;
         
         initAudioContext();
-        audioUnlocked = true;
         
-        // Call the Dart callback to notify that iOS audio is unlocked
-        if (window.onIOSAudioUnlocked) {
-          window.onIOSAudioUnlocked();
+        // Try to resume the context if it's suspended
+        if (audioContext.state === 'suspended') {
+          audioContext.resume().then(() => {
+            audioUnlocked = true;
+            callFlutterIOSUnlocked();
+          }).catch((err) => {
+            console.warn('Failed to resume audio context:', err);
+          });
+        } else {
+          audioUnlocked = true;
+          callFlutterIOSUnlocked();
         }
         
         // Remove event listeners after unlock
@@ -98,6 +182,16 @@
         let audioContext;
         let unlocked = false;
         
+        // Create a minimal audio buffer to unlock audio on iOS
+        function createUnlockBuffer() {
+          if (!audioContext) return;
+          const buffer = audioContext.createBuffer(1, 1, 22050);
+          const source = audioContext.createBufferSource();
+          source.buffer = buffer;
+          source.connect(audioContext.destination);
+          source.start(0);
+        }
+        
         // Initialize audio context and unlock mechanism
         function initIOSAudio() {
           if (audioContext) return;
@@ -105,6 +199,8 @@
           try {
             const AudioContext = window.AudioContext || window.webkitAudioContext;
             audioContext = new AudioContext();
+            // Create a minimal buffer immediately to try to keep context alive
+            createUnlockBuffer();
             
             // Create unlock function
             const unlock = function() {
@@ -124,9 +220,13 @@
                   document.body.removeEventListener('touchstart', unlock);
                   document.body.removeEventListener('click', unlock);
                   
-                  // Notify Dart side that audio is unlocked
-                  if (window.onIOSAudioUnlocked) {
-                    window.onIOSAudioUnlocked();
+                  // Notify Dart side that audio is unlocked using multiple methods
+                  window.iosAudioUnlocked = true;
+                  
+                  // Try to call Flutter method directly
+                  if (window.FlutterApi) {
+                    window.FlutterApi.onIOSAudioUnlocked && 
+                    window.FlutterApi.onIOSAudioUnlocked();
                   }
                 }
               }, 0);
@@ -148,8 +248,8 @@
         document.addEventListener('click', initIOSAudio, { once: true });
       }
     })();
-    
-    // iOS Audio Context Restoration - handles suspended contexts after first play
+  
+    // Enhanced iOS Audio Context Management - handles suspended contexts and maintains state
     (function() {
       if (/iPad|iPhone|iPod/.test(navigator.userAgent) || 
           (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
@@ -157,18 +257,34 @@
         let audioContext;
         let resumeAttempts = 0;
         const maxResumeAttempts = 3;
+        let unlockPromise = null;
+        
+        // Create a minimal audio buffer to unlock audio on iOS
+        function createUnlockBuffer() {
+          if (!audioContext) return;
+          const buffer = audioContext.createBuffer(1, 1, 22050);
+          const source = audioContext.createBufferSource();
+          source.buffer = buffer;
+          source.connect(audioContext.destination);
+          source.start(0);
+        }
         
         function getAudioContext() {
           if (!window.AudioContext) window.AudioContext = window.webkitAudioContext;
-          return new AudioContext();
+          if (!audioContext) {
+            audioContext = new AudioContext();
+            // Create a minimal buffer immediately to try to keep context alive
+            createUnlockBuffer();
+          }
+          return audioContext;
         }
         
         // Function to resume suspended audio context
         function resumeIOSAudioContext() {
           if (!audioContext) {
-            // Try to get Flutter's audio context or create our own
+            // Initialize audio context if not already done
             try {
-              audioContext = getAudioContext();
+              getAudioContext();
             } catch (e) {
               console.warn('Could not create audio context:', e);
               return;
@@ -176,13 +292,20 @@
           }
           
           if (audioContext.state === 'suspended' || audioContext.state === 'closed') {
-            audioContext.resume().then(() => {
+            const resumePromise = audioContext.resume().then(() => {
               console.log('Audio context resumed successfully');
               resumeAttempts = 0;
               
-              // Notify Flutter that audio is available again
-              if (window.onIOSAudioUnlocked) {
-                window.onIOSAudioUnlocked();
+              // Ensure context is properly unlocked
+              if (audioContext.state === 'running') {
+                // Call Flutter notification method
+                window.iosAudioUnlocked = true;
+                
+                // Try to communicate with Flutter that context is active
+                if (window.FlutterApi) {
+                  window.FlutterApi.onIOSAudioUnlocked && 
+                  window.FlutterApi.onIOSAudioUnlocked();
+                }
               }
             }).catch((err) => {
               console.warn('Failed to resume audio context:', err);
@@ -191,36 +314,94 @@
                 setTimeout(resumeIOSAudioContext, 100);
               }
             });
+            
+            // Return the promise to allow chaining
+            return resumePromise;
+          } else if (audioContext.state === 'running') {
+            // Context is already running, just return a resolved promise
+            return Promise.resolve();
           }
         }
         
-        // Monitor for context suspension
+        // Function to initialize and unlock audio context on first user interaction
+        function initAndUnlockAudio() {
+          if (unlockPromise) return unlockPromise; // Prevent multiple concurrent unlocks
+          
+          unlockPromise = new Promise((resolve, reject) => {
+            try {
+              getAudioContext();
+              
+              // Try to resume the context immediately
+              resumeIOSAudioContext().then(() => {
+                if (audioContext && audioContext.state === 'running') {
+                  // Set flag and try to notify Flutter
+                  window.iosAudioUnlocked = true;
+                  
+                  if (window.FlutterApi) {
+                    window.FlutterApi.onIOSAudioUnlocked && 
+                    window.FlutterApi.onIOSAudioUnlocked();
+                  }
+                  
+                  resolve(audioContext);
+                } else {
+                  reject(new Error('Audio context not running after resume'));
+                }
+              }).catch(reject);
+            } catch (e) {
+              console.error('Error initializing audio context:', e);
+              reject(e);
+            }
+          });
+          
+          return unlockPromise;
+        }
+        
+        // Monitor for context suspension and visibility changes
         document.addEventListener('visibilitychange', function() {
           if (!document.hidden && audioContext) {
             setTimeout(resumeIOSAudioContext, 100);
           }
         });
         
-        // Also resume on user interactions
-        document.addEventListener('touchstart', resumeIOSAudioContext, { once: false });
-        document.addEventListener('click', resumeIOSAudioContext, { once: false });
+        // Handle page focus/blur to maintain audio context
+        window.addEventListener('focus', function() {
+          if (audioContext && (audioContext.state === 'suspended' || audioContext.state === 'closed')) {
+            resumeIOSAudioContext();
+          }
+        });
         
-        // Try to initialize audio context on load
+        // Also resume on user interactions
+        document.addEventListener('touchstart', function() {
+          resumeIOSAudioContext();
+        }, { once: false });
+        
+        document.addEventListener('click', function() {
+          resumeIOSAudioContext();
+        }, { once: false });
+        
+        document.addEventListener('touchend', function() {
+          // Sometimes touchend is needed instead of touchstart to unlock
+          resumeIOSAudioContext();
+        }, { once: false });
+        
+        // Try to initialize audio context on load with a small delay
         window.addEventListener('load', function() {
-          // Attempt to initialize audio context if not already done
           setTimeout(() => {
-            if (!audioContext) {
-              try {
-                audioContext = getAudioContext();
-              } catch (e) {
-                console.warn('Could not create audio context on load:', e);
-              }
-            }
+            getAudioContext();
           }, 500);
         });
         
-        // Expose function for Flutter to call to resume context
+        // Expose function for Flutter to call to initialize and resume context
+        window.initAndUnlockAudio = initAndUnlockAudio;
         window.resumeIOSAudioContext = resumeIOSAudioContext;
+        
+        // Also expose a function that Flutter can call to ensure context is active
+        window.ensureAudioContextActive = function() {
+          if (audioContext && audioContext.state !== 'running') {
+            return resumeIOSAudioContext();
+          }
+          return Promise.resolve();
+        };
       }
     })();
   </script>
