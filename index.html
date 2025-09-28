@@ -1,38 +1,105 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
   <base href="/siamsound-fresh/">
-
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="An app to explore traditional Thai musical instruments">
 
   <!-- iOS meta tags & icons -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="thai_music">
+  <meta name="apple-mobile-web-app-title" content="Thai Music Explorer">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Chrome for Android theme color -->
+  <meta name="theme-color" content="#0175C2">
+
+  <!-- Windows meta tags -->
+  <meta name="msapplication-TileColor" content="#0175C2">
+  <meta name="msapplication-TileImage" content="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>thai_music</title>
+  <title>Thai Music Explorer</title>
   <link rel="manifest" href="manifest.json">
-</head>
-<body>
-  <script src="flutter_bootstrap.js" async></script>
-</body>
+
+  <script>
+    // iOS Audio Unlock Function
+    (function() {
+      let audioUnlocked = false;
+      let audioContext = null;
+      let iOS = false;
+
+      // Detect iOS devices
+      function isIOS() {
+        return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+               (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      }
+
+      // Initialize audio context
+      function initAudioContext() {
+        if (audioContext) return;
+
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        audioContext = new AudioContext();
+
+        // Create unlock sound buffer
+        const buffer = audioContext.createBuffer(1, 1, 22050);
+        const source = audioContext.createBufferSource();
+        source.buffer = buffer;
+        source.connect(audioContext.destination);
+        source.start(0);
+      }
+
+      // Unlock function
+      function unlockIOSAudio() {
+        if (audioUnlocked) return;
+
+        initAudioContext();
+        audioUnlocked = true;
+
+        // Remove event listeners after unlock
+        document.removeEventListener('touchstart', unlockIOSAudio);
+        document.removeEventListener('click', unlockIOSAudio);
+        document.removeEventListener('touchend', unlockIOSAudio);
+      }
+
+      // Check if iOS and set up unlock
+      if (isIOS()) {
+        iOS = true;
+        document.addEventListener('touchstart', unlockIOSAudio, { once: true });
+        document.addEventListener('click', unlockIOSAudio, { once: true });
+        document.addEventListener('touchend', unlockIOSAudio, { once: true });
+      }
+
+      // Create a global audio unlock function for Flutter to call
+      window.unlockIOSAudio = function() {
+        if (iOS && !audioUnlocked) {
+          unlockIOSAudio();
+        }
+      };
+
+      // Also initialize on load as a backup
+      window.addEventListener('load', function() {
+        // Ensure audio context exists on load
+        if (isIOS() && !audioContext) {
+          initAudioContext();
+        }
+      });
+    })();
+  </script>
+
+  <!-- Web Audio API polyfill for iOS compatibility -->
+  <script>
+    // Ensure Web Audio API is available
+    if (typeof AudioContext === 'undefined' && typeof webkitAudioContext !== 'undefined') {
+      window.AudioContext = webkitAudioContext;
+    }
+   </script>
+ </head>
+ <body>
+   <script src="flutter_bootstrap.js" async></script>
+ </body>
 </html>
